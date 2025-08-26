@@ -44,20 +44,53 @@ function App() {
     setNotificationPermission(permission);
   };
 
-  const scheduleNotification = (notificationTime: Date) => {
+  const scheduleNotification = async (notificationTime: Date, body: string, icon: string) => {
     if (notificationPermission !== 'granted') return;
 
-    const now = new Date().getTime();
-    const delay = notificationTime.getTime() - now;
-
-    if (delay > 0) {
-      setTimeout(() => {
-        console.log('Attempting to show notification...'); // Added log
-        new Notification('XPR Stake Reward', {
-          body: 'It\'s time to claim your XPR staking rewards!',
-          icon: '/pwa-192x192.png',
-        });
-      }, delay);
+    // Wait for the service worker to be ready and controlling the page
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        if (registration.active) {
+          registration.active.postMessage({
+            type: 'SCHEDULE_NOTIFICATION',
+            payload: {
+              notificationTime: notificationTime.getTime(), // Send timestamp
+              body: body,
+              icon: icon,
+            },
+          });
+          console.log('Message sent to service worker to schedule notification.');
+        } else {
+          console.warn('Service worker is ready but not active, falling back to main thread (unreliable).');
+          const now = new Date().getTime();
+          const delay = notificationTime.getTime() - now;
+          if (delay > 0) {
+            setTimeout(() => {
+              new Notification('XPR Stake Reward', { body: body, icon: icon });
+            }, delay);
+          }
+        }
+      } catch (error) {
+        console.error('Error waiting for service worker ready:', error);
+        console.warn('Service worker not ready, scheduling notification in main thread (unreliable).');
+        const now = new Date().getTime();
+        const delay = notificationTime.getTime() - now;
+        if (delay > 0) {
+          setTimeout(() => {
+            new Notification('XPR Stake Reward', { body: body, icon: icon });
+          }, delay);
+        }
+      }
+    } else {
+      console.warn('Service worker API not supported, scheduling notification in main thread (unreliable).');
+      const now = new Date().getTime();
+      const delay = notificationTime.getTime() - now;
+      if (delay > 0) {
+        setTimeout(() => {
+          new Notification('XPR Stake Reward', { body: body, icon: icon });
+        }, delay);
+      }
     }
   };
 
@@ -95,7 +128,7 @@ function App() {
         const nextClaimTime = new Date(lastClaimTimestamp + 24 * 60 * 60 * 1000);
         
         setClaimStatus(`Next claim is available at: ${nextClaimTime.toLocaleString()}`);
-        scheduleNotification(nextClaimTime);
+        await scheduleNotification(nextClaimTime, 'It\'s time to claim your XPR staking rewards!', '/pwa-192x192.png');
       } else {
         setClaimStatus('No staking information found. You may be able to claim now.');
       }
@@ -108,7 +141,7 @@ function App() {
     }
   };
 
-  const handleTestNotification = () => {
+  const handleTestNotification = async () => {
     if (notificationPermission !== 'granted') {
       alert('Please enable notifications first.');
       return;
@@ -116,7 +149,7 @@ function App() {
     console.log('Scheduling a test notification in 10 seconds...');
     const tenSecondsInMs = 10 * 1000;
     const testNotificationTime = new Date(new Date().getTime() + tenSecondsInMs);
-    scheduleNotification(testNotificationTime);
+    await scheduleNotification(testNotificationTime, 'This is a test notification!', '/pwa-192x192.png');
     alert('Test notification scheduled! You should receive it in 10 seconds.');
   };
 
