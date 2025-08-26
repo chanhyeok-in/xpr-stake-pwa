@@ -1,5 +1,5 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import * as supabaseJs from '@supabase/supabase-js'; // Changed import statement
+// No import for VercelRequest, VercelResponse types as they are not needed at runtime
+const supabaseJs = require('@supabase/supabase-js'); // Changed import statement
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -11,7 +11,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 const supabase = supabaseJs.createClient(supabaseUrl, supabaseAnonKey);
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+module.exports = async function handler(req, res) { // Changed to module.exports and removed types
   if (req.method === 'POST') {
     const { subscription, xprAccount } = req.body;
 
