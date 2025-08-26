@@ -7,10 +7,10 @@
   ],
   "functions": {
     "api/check-rewards.cjs": {
-      "runtime": "nodejs18.x"
+      "runtime": "nodejs@18.x"
     },
     "api/subscribe.cjs": {
-      "runtime": "nodejs18.x"
+      "runtime": "nodejs@18.x"
     }
   }
 }
