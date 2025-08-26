@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
+import * as supabaseJs from '@supabase/supabase-js'; // Changed import statement
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -9,7 +9,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Supabase URL and Anon Key must be provided as environment variables.');
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = supabaseJs.createClient(supabaseUrl, supabaseAnonKey);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'POST') {
