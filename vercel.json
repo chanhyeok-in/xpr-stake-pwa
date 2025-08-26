@@ -4,13 +4,5 @@
       "path": "/api/check-rewards.cjs",
       "schedule": "0 10 * * *"
     }
-  ],
-  "functions": {
-    "api/check-rewards.cjs": {
-      "runtime": "nodejs@18.x"
-    },
-    "api/subscribe.cjs": {
-      "runtime": "nodejs@18.x"
-    }
-  }
+  ]
 }
