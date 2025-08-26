@@ -1,8 +1,9 @@
 // No import for VercelRequest, VercelResponse types as they are not needed at runtime
 const { createClient } = require('@supabase/supabase-js');
 const webpush = require('web-push');
-const nodeFetch = require('node-fetch'); // Import node-fetch as CommonJS
-const fetch = nodeFetch; // In CommonJS, node-fetch's default export is the fetch function itself
+// Removed nodeFetch import and usage
+// const nodeFetch = require('node-fetch');
+// const fetch = nodeFetch; // In CommonJS, node-fetch's default export is the fetch function itself
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -33,6 +34,7 @@ const COOLDOWN_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours
 // Function to get reward status from Proton blockchain
 async function getProtonRewardStatus(xprAccount) { // Removed type annotation for xprAccount
   try {
+    // Now using global fetch
     const response = await fetch(`${PROTON_RPC_ENDPOINT}/v1/chain/get_table_rows`, {
       method: 'POST',
       headers: {

@@ -15,7 +15,7 @@
     "@proton/js": "^28.1.2",
     "@proton/web-sdk": "^4.2.20",
     "@supabase/supabase-js": "^2.56.0",
-    "node-fetch": "^3.3.2",
+    
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "web-push": "^3.6.7"
