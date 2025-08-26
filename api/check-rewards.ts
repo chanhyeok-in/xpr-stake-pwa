@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import webpush from 'web-push';
+import * as webpush from 'web-push'; // Changed import statement
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -114,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             notificationPayload = {
               title: 'XPR 보상 청구 가능!',
               body: '지금 바로 XPR 보상을 청구하세요!',
-              url: 'https://xpr-stake-pwa.vercel.app/claim'
+              url: 'https://xpr-stake-pwa.vercel.app' // Fixed PWA claim URL
             };
             shouldSendNotification = true;
           } else if (remainingHours <= 12 && remainingHours > 0) {
@@ -122,7 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             notificationPayload = {
               title: 'XPR 보상 청구 예정',
               body: `XPR 보상 청구까지 약 ${remainingHours}시간 남았습니다.`, // Use remainingHours
-              url: 'https://xpr-stake-pwa.vercel.app/status'
+              url: 'https://xpr-stake-pwa.vercel.app' // Fixed PWA status URL
             };
             shouldSendNotification = true;
           }
