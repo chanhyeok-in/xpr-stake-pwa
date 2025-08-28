@@ -10,6 +10,19 @@ function App() {
 
   const rpcEndpoint = 'https://rpc.api.mainnet.metalx.com';
 
+  useEffect(() => {
+    const savedSession = localStorage.getItem('proton-session');
+    if (savedSession) {
+      try {
+        const sessionData = JSON.parse(savedSession);
+        setSession(sessionData);
+      } catch (e) {
+        console.error('Could not parse saved session:', e);
+        localStorage.removeItem('proton-session');
+      }
+    }
+  }, []);
+
   const handleLogin = async () => {
     try {
       const { session } = await ProtonWebSDK({
@@ -25,6 +38,7 @@ function App() {
         },
       });
       setSession(session);
+      localStorage.setItem('proton-session', JSON.stringify(session));
       requestNotificationPermission();
     } catch (e) {
       console.error('Login error:', e);
@@ -32,11 +46,12 @@ function App() {
   };
 
   const handleLogout = async () => {
-    if (session) {
+    if (session && typeof session.logout === 'function') {
       await session.logout();
-      setSession(null);
-      setClaimStatus(null);
     }
+    localStorage.removeItem('proton-session');
+    setSession(null);
+    setClaimStatus(null);
   };
 
   const requestNotificationPermission = async () => {
