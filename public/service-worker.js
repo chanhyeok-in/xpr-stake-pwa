@@ -1,5 +1,5 @@
 self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json() : {};
+  const data = event.data ? event?.data?.json() : {};
   const title = data.title || 'XPR Stake Notifier';
   const options = {
     body: data.body || 'You have a new notification.',
