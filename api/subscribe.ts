@@ -1,44 +1,45 @@
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase URL and Anon Key must be provided as environment variables.');
-}
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
 export default async function handler(req, res) {
-  if (req.method === 'POST') {
-    const { subscription, xprAccount } = req.body;
-
-    if (!subscription || !xprAccount) {
-      return res.status(400).json({ error: 'Missing subscription or XPR account.' });
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .insert([
-          { xpr_account: xprAccount, subscription_data: subscription }
-        ]);
-
-      if (error) {
-        console.error('Error saving subscription:', error);
-        return res.status(500).json({ error: 'Failed to save subscription.' });
-      }
-
-      return res.status(201).json({ message: 'Subscription saved successfully.', data });
-
-    } catch (e) {
-      console.error('Unexpected error:', e);
-      return res.status(500).json({ error: 'An unexpected error occurred.' });
-    }
-
-  } else {
+  if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+    return res.status(405).end(`Method ${req.method} Not Allowed`);
+  }
+
+  const { subscription, xprAccount } = req.body;
+
+  if (!subscription || !xprAccount) {
+    return res.status(400).json({ error: 'Missing subscription or XPR account.' });
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/subscriptions`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal', // Don't return the inserted data
+        },
+        body: JSON.stringify({
+          xpr_account: xprAccount,
+          subscription_data: subscription,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error saving subscription:', errorData);
+      throw new Error(errorData.message || 'Failed to save subscription.');
+    }
+
+    return res.status(201).json({ message: 'Subscription saved successfully.' });
+
+  } catch (e) {
+    console.error('Unexpected error:', e);
+    return res.status(500).json({ error: e.message || 'An unexpected error occurred.' });
   }
 }

@@ -1,40 +1,70 @@
-import { createClient } from '@supabase/supabase-js';
+import * as webpush from 'web-push';
 
-// Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase URL and Anon Key must be provided.');
+// Configure web-push with VAPID details
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:your-email@example.com';
+
+if (vapidPublicKey && vapidPrivateKey) {
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 }
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default async function handler(req, res) {
-  if (req.method === 'POST') {
-    const { xprAccount } = req.body;
-
-    try {
-      const { data: subscriptions, error: fetchError } = await supabase
-        .from('subscriptions')
-        .select('subscription_data') // Select only the data
-        .eq('xpr_account', xprAccount);
-
-      if (fetchError) {
-        return res.status(500).json({ error: `Supabase error: ${fetchError.message}` });
-      }
-
-      if (!subscriptions || subscriptions.length === 0) {
-        return res.status(404).json({ error: `No subscription found for account ${xprAccount}.` });
-      }
-      
-      // Step 2: Just return the found subscriptions, don't try to send a push.
-      res.status(200).json({ message: `Successfully fetched ${subscriptions.length} subscriptions.`, data: subscriptions });
-
-    } catch (e) {
-      res.status(500).json({ error: `Unexpected error: ${e.message}` });
-    }
-  } else {
+  if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+    return res.status(405).end(`Method ${req.method} Not Allowed`);
+  }
+  
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    return res.status(500).json({ error: 'VAPID keys are not configured.' });
+  }
+
+  const { xprAccount } = req.body;
+
+  if (!xprAccount) {
+    return res.status(400).json({ error: 'Missing xprAccount.' });
+  }
+
+  try {
+    const subsResponse = await fetch(`${supabaseUrl}/rest/v1/subscriptions?select=subscription_data&xpr_account=eq.${xprAccount}`,
+      {
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+      }
+    );
+
+    if (!subsResponse.ok) {
+      const errorData = await subsResponse.json();
+      throw new Error(errorData.message || 'Failed to fetch subscription.');
+    }
+    const subscriptions = await subsResponse.json();
+
+    if (!subscriptions || subscriptions.length === 0) {
+      return res.status(404).json({ error: `No subscription found for account ${xprAccount}.` });
+    }
+
+    const notificationPayload = {
+      title: '테스트 알림',
+      body: '이 알림은 관리자 테스트 목적으로 발송되었습니다.',
+      url: '/'
+    };
+
+    for (const sub of subscriptions) {
+      await webpush.sendNotification(
+        sub.subscription_data,
+        JSON.stringify(notificationPayload)
+      );
+    }
+
+    return res.status(200).json({ message: `Test notification sent to ${subscriptions.length} device(s) for ${xprAccount}.` });
+
+  } catch (e) {
+    console.error('Unexpected error in test-push:', e);
+    return res.status(500).json({ error: e.message || 'An unexpected error occurred.' });
   }
 }

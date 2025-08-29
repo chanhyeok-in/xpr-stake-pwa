@@ -1,33 +1,20 @@
-import { createClient } from '@supabase/supabase-js';
 import * as webpush from 'web-push';
 
-// Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase URL and Anon Key must be provided as environment variables.');
-}
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Configure web-push with VAPID details
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:your-email@example.com';
 
-if (!vapidPublicKey || !vapidPrivateKey) {
-  throw new Error('VAPID Public and Private Keys must be provided as environment variables.');
+if (vapidPublicKey && vapidPrivateKey) {
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 }
 
-const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:your-email@example.com';
-webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-
-// Proton RPC Endpoint
 const PROTON_RPC_ENDPOINT = process.env.PROTON_RPC_ENDPOINT || 'https://rpc.api.mainnet.metalx.com';
-
-// Cooldown period in milliseconds (24 hours)
 const COOLDOWN_PERIOD_MS = 24 * 60 * 60 * 1000;
 
-// Function to get reward status from Proton blockchain
 async function getProtonRewardStatus(xprAccount) {
   try {
     const response = await fetch(`${PROTON_RPC_ENDPOINT}/v1/chain/get_table_rows`, {
@@ -43,19 +30,12 @@ async function getProtonRewardStatus(xprAccount) {
         limit: 1,
       }),
     });
-
-    if (!response.ok) {
-      throw new Error(`Network response was not ok: ${response.statusText}`);
-    }
-
+    if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
     const data = await response.json();
-
     if (data.rows && data.rows.length > 0) {
-      const stakerInfo = data.rows[0];
-      const lastClaimTimestampSeconds = stakerInfo.lastclaim;
-      const lastClaimTime = new Date(lastClaimTimestampSeconds * 1000);
-      const nextClaimTime = new Date(lastClaimTime.getTime() + COOLDOWN_PERIOD_MS);
-      return { lastClaimTime, nextClaimTime };
+      const lastClaimTimestampSeconds = data.rows[0].lastclaim;
+      const nextClaimTime = new Date((lastClaimTimestampSeconds * 1000) + COOLDOWN_PERIOD_MS);
+      return { nextClaimTime };
     }
     return null;
   } catch (error) {
@@ -64,54 +44,68 @@ async function getProtonRewardStatus(xprAccount) {
   }
 }
 
-export default async function handler(req, res) {
-  try {
-    const { data: subscriptions, error: fetchError } = await supabase
-      .from('subscriptions')
-      .select('*');
+async function deleteSubscription(endpoint) {
+    await fetch(
+      `${supabaseUrl}/rest/v1/subscriptions?subscription_data->>endpoint=eq.${encodeURIComponent(endpoint)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+      }
+    );
+    console.log(`Deleted invalid subscription for endpoint: ${endpoint}`);
+}
 
-    if (fetchError) {
-      console.error('Error fetching subscriptions:', fetchError);
-      return res.status(500).json({ error: 'Failed to fetch subscriptions.' });
+
+export default async function handler(req, res) {
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    return res.status(500).json({ error: 'VAPID keys are not configured.' });
+  }
+
+  try {
+    const subsResponse = await fetch(`${supabaseUrl}/rest/v1/subscriptions?select=*`, {
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+    });
+
+    if (!subsResponse.ok) {
+      throw new Error(await subsResponse.text());
     }
+    const subscriptions = await subsResponse.json();
 
     if (!subscriptions || subscriptions.length === 0) {
       return res.status(200).json({ message: 'No subscriptions to process.' });
     }
 
-    for (const sub of subscriptions) {
-      const { id, xpr_account, subscription_data } = sub;
-
+    const notificationPromises = subscriptions.map(async (sub) => {
       try {
-        const rewardStatus = await getProtonRewardStatus(xpr_account);
-        const now = new Date();
-
-        if (rewardStatus && rewardStatus.nextClaimTime && rewardStatus.nextClaimTime <= now) {
-          const notificationPayload = {
+        const rewardStatus = await getProtonRewardStatus(sub.xpr_account);
+        if (rewardStatus && rewardStatus.nextClaimTime <= new Date()) {
+          const notificationPayload = JSON.stringify({
             title: 'XPR 보상 청구 가능!',
             body: '지금 바로 XPR 보상을 청구하세요!',
             url: '/'
-          };
-
-          await webpush.sendNotification(
-            subscription_data,
-            JSON.stringify(notificationPayload)
-          );
-          console.log(`Notification sent to ${xpr_account}`);
+          });
+          await webpush.sendNotification(sub.subscription_data, notificationPayload);
+          console.log(`Notification sent to ${sub.xpr_account}`);
         }
       } catch (notificationError) {
-        console.error(`Error sending notification to ${xpr_account}:`, notificationError);
+        console.error(`Error sending notification to ${sub.xpr_account}:`, notificationError);
         if (notificationError.statusCode === 410 || notificationError.statusCode === 404) {
-          console.log(`Subscription for ${xpr_account} is no longer valid. Deleting from DB.`);
-          await supabase.from('subscriptions').delete().eq('id', id);
+          await deleteSubscription(sub.subscription_data.endpoint);
         }
       }
-    }
+    });
+
+    await Promise.all(notificationPromises);
 
     return res.status(200).json({ message: 'Reward check and notifications processed.' });
-
   } catch (e) {
     console.error('Unexpected error in check-rewards:', e);
-    return res.status(500).json({ error: 'An unexpected error occurred during processing.' });
+    return res.status(500).json({ error: e.message || 'An unexpected error occurred.' });
   }
 }
