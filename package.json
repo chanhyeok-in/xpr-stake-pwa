@@ -16,9 +16,9 @@
     "@proton/web-sdk": "^4.2.20",
         "firebase-admin": "^12.3.0",
     
+        
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "web-push": "^3.6.7"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
