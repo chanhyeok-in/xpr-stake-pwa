@@ -6,7 +6,7 @@ import App from './App.tsx'
 // Service Worker Registration
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js') // Path to the generated service worker
+    navigator.serviceWorker.register('/firebase-messaging-sw.js') // Path to the generated service worker
       .then(registration => {
         console.log('Service Worker registered with scope:', registration.scope);
       })

@@ -93,7 +93,7 @@ export default async function handler(req, res) {
         const rewardStatus = await getProtonRewardStatus(sub.xpr_account);
         if (rewardStatus && rewardStatus.nextClaimTime <= new Date()) {
           const message = {
-            token: sub.subscription_data.endpoint, // Use endpoint as token for FCM
+            token: sub.subscription_data, // Use the FCM token directly from the DB
             notification: {
               title: 'XPR 보상 청구 가능!',
               body: '지금 바로 XPR 보상을 청구하세요!',

@@ -7,10 +7,10 @@ export default async function handler(req, res) {
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const { subscription, xprAccount } = req.body;
+  const { fcmToken, xprAccount } = req.body;
 
-  if (!subscription || !xprAccount) {
-    return res.status(400).json({ error: 'Missing subscription or XPR account.' });
+  if (!fcmToken || !xprAccount) {
+    return res.status(400).json({ error: 'Missing fcmToken or XPR account.' });
   }
 
   try {
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           xpr_account: xprAccount,
-          subscription_data: subscription,
+          subscription_data: fcmToken, // Store the FCM token directly
         }),
       }
     );

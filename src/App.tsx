@@ -1,40 +1,23 @@
 import { useState, useEffect } from 'react';
 import ProtonWebSDK from '@proton/web-sdk';
 import { Button, Container, Typography, Box, CircularProgress, Alert } from '@mui/material';
-
-// Helper function to convert VAPID key
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
-}
+import { getFCMToken } from './firebase'; // Import the new FCM token function
 
 function App() {
   const [session, setSession] = useState<any>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [isSubscribed, setIsSubscribed] = useState(false);
-  const [isSubscriptionLoading, setIsSubscriptionLoading] = useState(true);
+  // State to hold the FCM token
+  const [fcmToken, setFcmToken] = useState<string | null>(null);
+  const [isSubscriptionLoading, setIsSubscriptionLoading] = useState(false);
 
-  const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-
-  // Check for existing push subscription on component mount
+  // Check for existing FCM token on component mount
   useEffect(() => {
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      navigator.serviceWorker.ready.then(reg => {
-        reg.pushManager.getSubscription().then(subscription => {
-          if (subscription) {
-            setIsSubscribed(true);
-          }
-          setIsSubscriptionLoading(false);
-        });
-      });
+    // Storing the token in localStorage to check subscription status without asking Firebase every time.
+    const token = localStorage.getItem('fcm_token');
+    if (token) {
+      setFcmToken(token);
     }
   }, []);
 
@@ -83,57 +66,56 @@ function App() {
       setError('Please login first to subscribe.');
       return;
     }
-    if (!VAPID_PUBLIC_KEY) {
-      setError('VAPID public key is not configured. Cannot subscribe.');
-      console.error('VITE_VAPID_PUBLIC_KEY is not set in your environment variables.');
-      return;
-    }
 
     setIsSubscriptionLoading(true);
     setError(null);
 
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
+      // 1. Request permission and get FCM token
+      const token = await getFCMToken();
+      if (!token) {
+        throw new Error('Notification permission not granted.');
+      }
 
+      // 2. Send the token to the backend
       await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription, xprAccount: session.auth.actor }),
+        body: JSON.stringify({ fcmToken: token, xprAccount: session.auth.actor }),
       });
 
-      setIsSubscribed(true);
+      setFcmToken(token);
+      localStorage.setItem('fcm_token', token);
       setStatus('Successfully subscribed to notifications.');
     } catch (err) {
       console.error('Failed to subscribe:', err);
-      setError('Failed to subscribe to notifications. Please ensure you have granted permission.');
+      setError('Failed to subscribe. Please ensure you have granted notification permission in your browser settings.');
     } finally {
       setIsSubscriptionLoading(false);
     }
   };
 
   const unsubscribeFromPush = async () => {
+    if (!fcmToken) {
+      setError('Not currently subscribed.');
+      return;
+    }
     setIsSubscriptionLoading(true);
     setError(null);
 
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-
-      if (subscription) {
-        await fetch('/api/unsubscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subscription }),
-        });
-        await subscription.unsubscribe();
-      }
-
-      setIsSubscribed(false);
+      // 1. Send token to backend to remove from DB
+      await fetch('/api/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fcmToken }),
+      });
+      
+      // 2. Clear local token
+      setFcmToken(null);
+      localStorage.removeItem('fcm_token');
       setStatus('Successfully unsubscribed from notifications.');
+      
     } catch (err) {
       console.error('Failed to unsubscribe:', err);
       setError('Failed to unsubscribe. Please try again.');
@@ -141,6 +123,8 @@ function App() {
       setIsSubscriptionLoading(false);
     }
   };
+
+  const isSubscribed = !!fcmToken;
 
   return (
     <Container maxWidth="sm" style={{ textAlign: 'center', marginTop: '50px' }}>

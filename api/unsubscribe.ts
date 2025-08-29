@@ -7,15 +7,17 @@ export default async function handler(req, res) {
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const { subscription } = req.body;
+  const { fcmToken } = req.body;
 
-  if (!subscription || !subscription.endpoint) {
-    return res.status(400).json({ error: 'Missing subscription endpoint.' });
+  if (!fcmToken) {
+    return res.status(400).json({ error: 'Missing fcmToken.' });
   }
 
   try {
+    // Since we now store the FCM token directly in the subscription_data column,
+    // we can query for it directly.
     const response = await fetch(
-      `${supabaseUrl}/rest/v1/subscriptions?subscription_data->>endpoint=eq.${encodeURIComponent(subscription.endpoint)}`,
+      `${supabaseUrl}/rest/v1/subscriptions?subscription_data=eq.${encodeURIComponent(fcmToken)}`,
       {
         method: 'DELETE',
         headers: {
