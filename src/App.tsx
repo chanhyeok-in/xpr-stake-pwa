@@ -21,10 +21,8 @@ function App() {
 
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isSubscriptionLoading, setIsSubscriptionLoading] = useState(true);
-  const [isTestLoading, setIsTestLoading] = useState(false);
 
   const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-  const ADMIN_ACCOUNT = 'inch12'; // Admin account
 
   // Check for existing push subscription on component mount
   useEffect(() => {
