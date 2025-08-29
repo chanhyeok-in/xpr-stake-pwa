@@ -1,5 +1,5 @@
-const { createClient } = require('@supabase/supabase-js');
-const webpush = require('web-push');
+import { createClient } from '@supabase/supabase-js';
+import webpush from 'web-push';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -21,7 +21,7 @@ if (!vapidPublicKey || !vapidPrivateKey) {
 const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:your-email@example.com';
 webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
@@ -34,7 +34,6 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // 1. Fetch the subscription for the given account
     const { data: subscriptions, error: fetchError } = await supabase
       .from('subscriptions')
       .select('*')
@@ -49,32 +48,20 @@ module.exports = async function handler(req, res) {
       return res.status(404).json({ error: `No subscription found for account ${xprAccount}.` });
     }
 
-    // 2. Send a test notification to all subscriptions for that account
     const notificationPayload = {
       title: '테스트 알림',
       body: '이 알림은 관리자 테스트 목적으로 발송되었습니다.',
       url: '/'
     };
 
-    let notificationsSent = 0;
     for (const sub of subscriptions) {
-      try {
-        await webpush.sendNotification(
-          sub.subscription_data,
-          JSON.stringify(notificationPayload)
-        );
-        notificationsSent++;
-      } catch (notificationError) {
-        console.error(`Error sending test notification to ${xprAccount}:`, notificationError);
-        // Optionally, handle expired subscriptions here as well
-      }
+      await webpush.sendNotification(
+        sub.subscription_data,
+        JSON.stringify(notificationPayload)
+      );
     }
 
-    if (notificationsSent > 0) {
-        return res.status(200).json({ message: `Test notification sent to ${notificationsSent} device(s) for ${xprAccount}.` });
-    } else {
-        return res.status(500).json({ error: 'Failed to send test notification.' });
-    }
+    return res.status(200).json({ message: `Test notification sent to ${subscriptions.length} device(s) for ${xprAccount}.` });
 
   } catch (e) {
     console.error('Unexpected error in test-push:', e);

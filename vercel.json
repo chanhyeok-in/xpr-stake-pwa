@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/check-rewards.cjs",
+      "path": "/api/check-rewards",
       "schedule": "0 10 * * *"
     }
   ]
