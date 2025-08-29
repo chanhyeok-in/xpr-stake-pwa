@@ -1,3 +1,4 @@
+// Trigger new build to clear Vercel cache
 import { useState, useEffect } from 'react';
 import ProtonWebSDK from '@proton/web-sdk';
 import { Button, Container, Typography, Box, CircularProgress, Alert } from '@mui/material';
