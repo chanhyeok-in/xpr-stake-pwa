@@ -3,15 +3,6 @@ import * as webpush from 'web-push';
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-// Configure web-push with VAPID details
-const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:your-email@example.com';
-
-if (vapidPublicKey && vapidPrivateKey) {
-  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-}
-
 const PROTON_RPC_ENDPOINT = process.env.PROTON_RPC_ENDPOINT || 'https://rpc.api.mainnet.metalx.com';
 const COOLDOWN_PERIOD_MS = 24 * 60 * 60 * 1000;
 
@@ -58,11 +49,16 @@ async function deleteSubscription(endpoint) {
     console.log(`Deleted invalid subscription for endpoint: ${endpoint}`);
 }
 
-
 export default async function handler(req, res) {
+  // Move VAPID configuration inside the handler
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+  const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:your-email@example.com';
+
   if (!vapidPublicKey || !vapidPrivateKey) {
-    return res.status(500).json({ error: 'VAPID keys are not configured.' });
+    return res.status(500).json({ error: 'VAPID keys are not configured on the server.' });
   }
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
   try {
     const subsResponse = await fetch(`${supabaseUrl}/rest/v1/subscriptions?select=*`, {
