@@ -16,7 +16,6 @@ function urlBase64ToUint8Array(base64String: string) {
 
 function App() {
   const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
