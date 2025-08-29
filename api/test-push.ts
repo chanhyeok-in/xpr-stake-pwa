@@ -1,22 +1,62 @@
-import * as webpush from 'web-push';
+import { SignJWT } from 'jose';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+
+let firebaseServiceAccount = null;
+if (FIREBASE_SERVICE_ACCOUNT_JSON_BASE64) {
+  try {
+    firebaseServiceAccount = JSON.parse(Buffer.from(FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, 'base64').toString('utf8'));
+  } catch (e) {
+    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON_BASE64:', e);
+  }
+}
+
+async function getAccessToken() {
+  if (!firebaseServiceAccount) {
+    throw new Error('Firebase service account not configured.');
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const claims = {
+    iss: firebaseServiceAccount.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600, // 1 hour
+  };
+
+  const privateKey = firebaseServiceAccount.private_key;
+  const jwt = await new SignJWT(claims)
+    .setProtectedHeader({ alg: 'RS256' })
+    .sign(new TextEncoder().encode(privateKey));
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }).toString(),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to get access token: ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
 
 export default async function handler(req, res) {
-  // Move VAPID configuration inside the handler
-  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
-  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-  const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:your-email@example.com';
-
-  if (!vapidPublicKey || !vapidPrivateKey) {
-    return res.status(500).json({ error: 'VAPID keys are not configured on the server.' });
-  }
-  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
+  }
+
+  if (!firebaseServiceAccount) {
+    return res.status(500).json({ error: 'Firebase service account not configured.' });
   }
 
   const { xprAccount } = req.body;
@@ -26,6 +66,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    const accessToken = await getAccessToken();
     const subsResponse = await fetch(`${supabaseUrl}/rest/v1/subscriptions?select=subscription_data&xpr_account=eq.${xprAccount}`,
       {
         headers: {
@@ -46,19 +87,33 @@ export default async function handler(req, res) {
     }
 
     const notificationPayload = {
-      title: '테스트 알림',
-      body: '이 알림은 관리자 테스트 목적으로 발송되었습니다.',
-      url: '/'
+      token: subscriptions[0].subscription_data.keys.p256dh, // This is not the correct token for FCM
+      notification: {
+        title: '테스트 알림',
+        body: '이 알림은 관리자 테스트 목적으로 발송되었습니다.',
+      },
+      webpush: {
+        fcm_options: {
+          link: '/'
+        }
+      }
     };
 
-    for (const sub of subscriptions) {
-      await webpush.sendNotification(
-        sub.subscription_data,
-        JSON.stringify(notificationPayload)
-      );
+    const fcmResponse = await fetch(`https://fcm.googleapis.com/v1/projects/${firebaseServiceAccount.project_id}/messages:send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ message: notificationPayload }),
+    });
+
+    if (!fcmResponse.ok) {
+      const errorText = await fcmResponse.text();
+      throw new Error(`FCM send error: ${errorText}`);
     }
 
-    return res.status(200).json({ message: `Test notification sent to ${subscriptions.length} device(s) for ${xprAccount}.` });
+    return res.status(200).json({ message: `Test notification sent successfully to ${xprAccount}.` });
 
   } catch (e) {
     console.error('Unexpected error in test-push:', e);
