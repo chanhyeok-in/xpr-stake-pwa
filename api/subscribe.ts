@@ -23,8 +23,7 @@ export default async function handler(req, res) {
         .from('subscriptions')
         .insert([
           { xpr_account: xprAccount, subscription_data: subscription }
-        ])
-        .select();
+        ]);
 
       if (error) {
         console.error('Error saving subscription:', error);
