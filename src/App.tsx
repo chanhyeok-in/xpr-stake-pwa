@@ -144,36 +144,6 @@ function App() {
     }
   };
 
-  const handleSendTestNotification = async () => {
-    if (!session) {
-      setError('Please login first.');
-      return;
-    }
-    setIsTestLoading(true);
-    setError(null);
-    setStatus(null);
-
-    try {
-      const response = await fetch('/api/test-push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ xprAccount: session.auth.actor }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to send test notification.');
-      }
-      
-      setStatus('Test notification sent successfully! You should receive it shortly.');
-    } catch (err: any) {
-      console.error('Failed to send test notification:', err);
-      setError(err.message || 'An unknown error occurred.');
-    } finally {
-      setIsTestLoading(false);
-    }
-  };
-
   return (
     <Container maxWidth="sm" style={{ textAlign: 'center', marginTop: '50px' }}>
       <Typography variant="h4" gutterBottom>
@@ -207,18 +177,6 @@ function App() {
                 'Subscribe to receive a notification when your XPR stake rewards are ready to claim.'
               }
             </Typography>
-
-            {/* Admin-only Test Button */}
-            {isSubscribed && session.auth.actor === ADMIN_ACCOUNT && (
-              <Button 
-                variant="outlined"
-                onClick={handleSendTestNotification}
-                disabled={isTestLoading}
-                style={{ marginTop: '20px', marginLeft: '10px' }}
-              >
-                {isTestLoading ? <CircularProgress size={24} /> : 'Send Test Notification (Admin)'}
-              </Button>
-            )}
           </Box>
         </Box>
       )}
