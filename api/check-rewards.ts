@@ -1,4 +1,4 @@
-import { SignJWT } from 'jose';
+import { SignJWT, importPKCS8 } from 'jose';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
@@ -166,6 +166,10 @@ export default async function handler(req, res) {
 
   } catch (e) {
     console.error('Unexpected error in check-rewards:', e);
+    return res.status(500).json({ error: e.message || 'An unexpected error occurred.' });
+  }
+}
+eck-rewards:', e);
     return res.status(500).json({ error: e.message || 'An unexpected error occurred.' });
   }
 }

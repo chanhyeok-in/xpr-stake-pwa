@@ -27,10 +27,12 @@ async function getAccessToken() {
     exp: now + 3600, // 1 hour
   };
 
-  const privateKey = firebaseServiceAccount.private_key;
+  const privateKeyPem = firebaseServiceAccount.private_key; // This is the PEM string
+  const privateKey = await importPKCS8(privateKeyPem, 'RS256'); // Use importPKCS8
+
   const jwt = await new SignJWT(claims)
     .setProtectedHeader({ alg: 'RS256' })
-    .sign(new TextEncoder().encode(privateKey));
+    .sign(privateKey); // Pass the KeyObject/CryptoKey directly
 
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
