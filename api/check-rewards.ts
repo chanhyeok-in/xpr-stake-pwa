@@ -90,28 +90,42 @@ export default async function handler(req, res) {
 
     const notificationPromises = subscriptions.map(async (sub) => {
       try {
+        console.log(`[${sub.xpr_account}] Checking reward status...`);
         const rewardStatus = await getProtonRewardStatus(sub.xpr_account);
-        if (rewardStatus && rewardStatus.nextClaimTime <= new Date()) {
-          const message = {
-            token: sub.subscription_data, // Use the FCM token directly from the DB
-            notification: {
-              title: 'XPR 보상 청구 가능!',
-              body: '지금 바로 XPR 보상을 청구하세요!',
-            },
-            webpush: {
-              fcm_options: {
-                link: 'https://xpr-stake-pwa.vercel.app/claim' // Deep link to claim page
+        
+        if (rewardStatus && rewardStatus.nextClaimTime) {
+          const nextClaimTime = rewardStatus.nextClaimTime;
+          const currentTime = new Date();
+          const isReady = nextClaimTime <= currentTime;
+          
+          console.log(`[${sub.xpr_account}] DB Next Claim Time: ${nextClaimTime.toISOString()}`);
+          console.log(`[${sub.xpr_account}] Current Server Time: ${currentTime.toISOString()}`);
+          console.log(`[${sub.xpr_account}] Is Ready to Claim? ${isReady}`);
+
+          if (isReady) {
+            console.log(`[${sub.xpr_account}] Condition met. Preparing to send notification.`);
+            const message = {
+              token: sub.subscription_data,
+              notification: {
+                title: 'XPR 보상 청구 가능!',
+                body: '지금 바로 XPR 보상을 청구하세요!',
+              },
+              webpush: {
+                fcm_options: {
+                  link: 'https://xpr-stake-pwa.vercel.app/claim'
+                }
               }
-            }
-          };
-
-          const fcmResponse = await admin.messaging().send(message);
-          console.log(`FCM notification sent to ${sub.xpr_account}:`, fcmResponse);
-
+            };
+            
+            console.log(`[${sub.xpr_account}] Sending FCM message...`);
+            const fcmResponse = await admin.messaging().send(message);
+            console.log(`[${sub.xpr_account}] FCM notification sent successfully:`, fcmResponse);
+          }
+        } else {
+          console.log(`[${sub.xpr_account}] No reward status or next claim time found from getProtonRewardStatus. Skipping.`);
         }
       } catch (notificationError) {
-        console.error(`Error sending notification to ${sub.xpr_account}:`, notificationError);
-        // Handle invalid tokens (e.g., delete subscription)
+        console.error(`[${sub.xpr_account}] Error processing subscription:`, notificationError);
       }
     });
 
